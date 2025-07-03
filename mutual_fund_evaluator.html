@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Indian Mutual Fund Evaluator</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+    }
+    h1 {
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+    th {
+      background: #333;
+      color: #fff;
+    }
+    input[type="number"] {
+      width: 80px;
+    }
+    .score-total {
+      font-weight: bold;
+      text-align: right;
+      margin-top: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 20px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .autoscored {
+      background-color: #eef;
+    }
+    .sub-inputs {
+      margin-top: 5px;
+    }
+    .sub-inputs input {
+      width: 70px;
+      margin-right: 5px;
+    }
+    .skip-cell {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Indian Mutual Fund Evaluation</h1>
+  <form id="evaluationForm">
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Metric</th>
+          <th>What to Look For</th>
+          <th>Fund Input</th>
+          <th>Score (1–10)</th>
+          <th>Include?</th>
+        </tr>
+      </thead>
+      <tbody id="rubricTable">
+        <!-- Rows populated by JavaScript -->
+      </tbody>
+    </table>
+    <div class="score-total">
+      Total Score: <span id="totalScore">0</span><br>
+      Percentage Score: <span id="percentageScore">0%</span>
+    </div>
+    <button type="button" onclick="calculateTotal()">Calculate Total</button>
+  </form>
+
+  <script>
+    const rubricData = [
+      ["Returns", "5Y CAGR (%)", "Equity: 12–15%+, Hybrid: 10–12%, Debt: 6–8%", "cagr"],
+      ["Risk Measures", "Sharpe Ratio", ">1 is good, >1.5 is excellent", "sharpe"],
+      ["Risk Measures", "Beta", "~1 or <1 is better", "beta"],
+      ["Expense Ratio", "Direct Plan (%)", "Equity <1%, Debt <0.5%", "expense"],
+      ["Expense Ratio", "Exit Load (%)", "<1% preferred for 1-year holding", "exitload"],
+      ["Liquidity", "AUM (Cr ₹)", ">₹500 Cr preferred", "aum"]
+    ];
+
+    function autoScore(metric, value) {
+      value = parseFloat(value);
+      if (isNaN(value)) return 0;
+      switch (metric) {
+        case "cagr":
+          if (value >= 15) return 10;
+          if (value >= 13) return 9;
+          if (value >= 12) return 8;
+          if (value >= 10) return 7;
+          return 5;
+        case "sharpe":
+          if (value >= 1.5) return 10;
+          if (value >= 1.2) return 9;
+          if (value >= 1.0) return 8;
+          if (value >= 0.8) return 6;
+          return 4;
+        case "beta":
+          if (value < 0.85) return 10;
+          if (value < 0.95) return 9;
+          if (value <= 1.05) return 8;
+          return 6;
+        case "expense":
+          if (value <= 0.5) return 10;
+          if (value <= 0.8) return 9;
+          if (value <= 1.0) return 8;
+          if (value <= 1.5) return 6;
+          return 4;
+        case "exitload":
+          if (value === 0) return 10;
+          if (value <= 0.25) return 9;
+          if (value <= 0.5) return 8;
+          if (value <= 1.0) return 6;
+          return 4;
+        case "aum":
+          if (value >= 10000) return 10;
+          if (value >= 5000) return 9;
+          if (value >= 1000) return 8;
+          return 6;
+        default:
+          return 0;
+      }
+    }
+
+    function calculateCAGR(begin, end) {
+      if (begin > 0 && end > 0) {
+        return (Math.pow(end / begin, 1 / 5) - 1) * 100;
+      }
+      return null;
+    }
+
+    const tableBody = document.getElementById("rubricTable");
+    rubricData.forEach(([category, metric, guidance, key], index) => {
+      let inputField = `<input type="number" name="input${index}" step="any" onchange="updateScore(${index}, '${key}')" />`;
+      if (key === "cagr") {
+        inputField += `
+          <div class="sub-inputs">
+            or Begin: <input type="number" id="begin${index}" step="any" onchange="handleCAGRAlt(${index})" />
+            End: <input type="number" id="end${index}" step="any" onchange="handleCAGRAlt(${index})" />
+          </div>`;
+      }
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${category}</td>
+        <td>${metric}</td>
+        <td>${guidance}</td>
+        <td>${inputField}</td>
+        <td><input type="number" name="score${index}" class="autoscored" readonly /></td>
+        <td class="skip-cell"><input type="checkbox" name="include${index}" checked /></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+    function updateScore(index, metric) {
+      const inputVal = document.forms["evaluationForm"][`input${index}`].value;
+      const score = autoScore(metric, inputVal);
+      document.forms["evaluationForm"][`score${index}`].value = score;
+      calculateTotal();
+    }
+
+    function handleCAGRAlt(index) {
+      const begin = parseFloat(document.getElementById(`begin${index}`).value);
+      const end = parseFloat(document.getElementById(`end${index}`).value);
+      const cagr = calculateCAGR(begin, end);
+      if (!isNaN(cagr)) {
+        document.forms["evaluationForm"][`input${index}`].value = cagr.toFixed(2);
+        updateScore(index, 'cagr');
+      }
+    }
+
+    function calculateTotal() {
+      let total = 0;
+      let included = 0;
+      rubricData.forEach((_, index) => {
+        const include = document.forms["evaluationForm"][`include${index}`].checked;
+        if (include) {
+          const score = parseFloat(document.forms["evaluationForm"][`score${index}`].value) || 0;
+          total += score;
+          included++;
+        }
+      });
+      document.getElementById("totalScore").innerText = total;
+      const percentage = included > 0 ? ((total / (included * 10)) * 100).toFixed(2) : 0;
+      document.getElementById("percentageScore").innerText = `${percentage}%`;
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker Registered'));
+    }
+  </script>
+</body>
+</html>
